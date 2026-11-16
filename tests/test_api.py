@@ -49,7 +49,7 @@ def test_endpoints_openapi_and_http_bigints(api):
     assert client.get("/api/stats?node_id=unknown").status_code == 404
     assert client.get("/api/stats?from=1700000000").status_code == 422
     assert client.get("/docs").status_code == 200
-    assert len(client.get("/openapi.json").json()["paths"]) == 10
+    assert len(client.get("/openapi.json").json()["paths"]) == 11
 
 
 def test_command_http_contract_and_concurrent_pending(api):
@@ -162,3 +162,41 @@ def test_closed_database_returns_503_without_killing_worker(api):
     assert client.get("/api/health").status_code == 503
     assert client.get("/api/nodes").status_code == 503
     assert app.state.service.thread.is_alive()
+
+
+def test_experiment_list_detail_paging_and_continuity(api):
+    client, transport, _, _ = api
+    assert client.get("/api/experiments").json() == dict(items=[], total=0, limit=100, offset=0)
+    first = client.post("/api/experiments", json={"name": "first"}).json()
+    client.post(f"/api/experiments/{first['id']}/stop")
+    second = client.post("/api/experiments", json={"name": "second"}).json()
+    page = client.get("/api/experiments?limit=1").json()
+    assert page["total"] == 2 and page["items"][0] == second
+    assert client.get("/api/experiments?limit=1&offset=1").json()["items"] == [
+        client.get(f"/api/experiments/{first['id']}").json()
+    ]
+    assert client.get("/api/experiments/9999").status_code == 404
+    assert client.get("/api/experiments?limit=1001").status_code == 422
+    assert client.get("/api/experiments?offset=-1").status_code == 422
+    activate(client, transport)
+    row = client.get("/api/nodes/node_01/history").json()["items"][0]
+    assert isinstance(row["continuity"], str) and row["continuity"]
+
+
+def test_live_server_cors_keeps_existing_origins(api):
+    client, _, _, _ = api
+    for origin in ("http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:5173"):
+        response = client.options(
+            "/api/nodes/node_01/commands",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+    assert (
+        "access-control-allow-origin"
+        not in client.get("/api/nodes", headers={"Origin": "https://evil.example"}).headers
+    )

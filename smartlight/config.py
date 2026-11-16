@@ -8,7 +8,12 @@ class Settings:
     database: Path = Path("data/smartlight.db")
     mqtt_host: str = "127.0.0.1"
     mqtt_port: int = 1883
-    origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
+    origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    )
     queue_size: int = 1024
 
     @classmethod

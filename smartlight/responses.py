@@ -39,6 +39,7 @@ class HistoryItem(BaseModel):
     id: int
     received_at: datetime
     quality: str
+    continuity: str
     telemetry: HttpTelemetry
 
 
@@ -115,3 +116,10 @@ class ExperimentResponse(BaseModel):
     notes: str
     started_at: datetime
     ended_at: datetime | None
+
+
+class ExperimentPage(BaseModel):
+    items: list[ExperimentResponse]
+    total: int
+    limit: int
+    offset: int

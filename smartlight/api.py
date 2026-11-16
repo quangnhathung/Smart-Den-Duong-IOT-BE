@@ -13,6 +13,7 @@ from .models import CommandInput, ExperimentInput, api_payload
 from .responses import (
     AlertPage,
     CommandResponse,
+    ExperimentPage,
     ExperimentResponse,
     HealthResponse,
     HistoryPage,
@@ -145,6 +146,16 @@ def create_app(settings=None, transport=None, clock=None):
         experiment_id: int | None = None,
     ):
         return await call("reporting.stats", node_id, utc_query(start), utc_query(end), experiment_id)
+
+    @app.get("/api/experiments", response_model=ExperimentPage)
+    async def list_experiments(
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100, offset: Annotated[int, Query(ge=0)] = 0
+    ):
+        return await call("reporting.experiments", limit, offset)
+
+    @app.get("/api/experiments/{experiment_id}", response_model=ExperimentResponse)
+    async def get_experiment(experiment_id: int):
+        return await call("reporting.experiment", experiment_id)
 
     @app.post("/api/experiments", status_code=201, response_model=ExperimentResponse)
     async def experiments(request: ExperimentInput):

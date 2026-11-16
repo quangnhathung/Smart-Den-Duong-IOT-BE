@@ -1,6 +1,6 @@
-# Backend đèn đường thông minh — TASK-008
+# Backend đèn đường thông minh — TASK-008/009
 
-Python3.12, FastAPI/Pydantic2/Paho2, SQLite WAL; chạy local một worker. Repo độc lập cùng cấp firmware, dùng [SRS](../firmware/docs/srs.md) và [MQTT v1](../firmware/docs/techs/mqtt.md). Đây là backend/API; dashboard React và tích hợp ba node thuộc task sau.
+Python3.12, FastAPI/Pydantic2/Paho2, SQLite WAL; chạy local một worker. Repo độc lập cùng cấp firmware, dùng [SRS](../firmware/docs/srs.md) và [MQTT v1](../firmware/docs/techs/mqtt.md). Đây là backend/API; [dashboard HTML/CSS/JS](../dashboard/README.md) chạy bằng VS Code Live Server. Tích hợp MQTT/Wokwi và ba node cần nghiệm thu riêng.
 
 ## Cài và kiểm tra
 
@@ -26,11 +26,11 @@ py -3.12 -m venv .venv
 
 Khởi tạo chỉ làm khi backend dừng; script version-check/idempotent, không xóa database. Một OS lock theo database ngăn collector thứ hai; file `.db.lock` có thể còn sau stop nhưng khóa OS đã nhả, không cần xóa file. Database phải nằm ổ local; không đặt WAL trên ổ mạng. Để dừng dùng Ctrl+C; sau đó có thể restart bằng đúng lệnh trên, không xóa data. Không bật nhiều worker hoặc chia sẻ DB cho backend khác.
 
-Dependency runtime và test được pin cùng requirements.txt cho máy demo, không nâng toolchain firmware. Cấu hình qua biến môi trường SMARTLIGHT_DB/MQTT_HOST/MQTT_PORT/ORIGINS (đầy đủ prefix trong .env.example); .env.example chỉ tham khảo, ứng dụng không tự load .env. Mặc định broker127.0.0.1:1883, CORS localhost:5173 và127.0.0.1:5173. Linux `export SMARTLIGHT_DB=...`, PowerShell `$env:SMARTLIGHT_DB='...'`.
+Dependency runtime và test được pin cùng requirements.txt cho máy demo, không nâng toolchain firmware. Cấu hình qua biến môi trường SMARTLIGHT_DB/MQTT_HOST/MQTT_PORT/ORIGINS (đầy đủ prefix trong .env.example); .env.example chỉ tham khảo, ứng dụng không tự load .env. Mặc định broker127.0.0.1:1883, CORS localhost/127.0.0.1 ở cổng5500 (Live Server) và5173. Linux `export SMARTLIGHT_DB=...`, PowerShell `$env:SMARTLIGHT_DB='...'`.
 
 ## Dùng API
 
-Mở http://127.0.0.1:8000/docs hoặc /openapi.json để xem request/response models. Không có màn hình dashboard riêng. Health503 khi broker/database/queue không sẵn sàng; vẫn đọc được lịch sử nếu DB còn hoạt động. Broker không chạy sẽ có log reconnect với backoff, không làm backend xóa dữ liệu hay báo online giả.
+Mở http://127.0.0.1:8000/docs hoặc /openapi.json để xem request/response models. Backend cung cấp API; giao diện ở repo dashboard cùng cấp. Health503 khi broker/database/queue không sẵn sàng; vẫn đọc được lịch sử nếu DB còn hoạt động. Broker không chạy sẽ có log reconnect với backoff, không làm backend xóa dữ liệu hay báo online giả.
 
 ```bash
 curl http://127.0.0.1:8000/api/health
@@ -44,13 +44,15 @@ curl 'http://127.0.0.1:8000/api/stats?node_id=node_01'
 
 PowerShell dùng `Invoke-RestMethod` (GET) và `Invoke-RestMethod -Method Post -ContentType 'application/json' -Body '{"mode":"MANUAL","brightness":80}' -Uri http://127.0.0.1:8000/api/nodes/node_01/commands`.
 
-History/stats nhận `from` và `to` ISO8601 UTC (Z/+00:00), mặc định một giờ gần nhất; experiment_id giới hạn theo phiên (nếu không truyền from/to thì dùng toàn phiên). History mặc định100, max1000/offset0. Timestamp HTTP là UTC ISO8601; `seq`, `uptime_ms`, `deadline_uptime_ms` là **chuỗi thập phân** trên HTTP để JavaScript không mất chính xác, còn MQTT vẫn dùng JSON number.
+History/stats nhận `from` và `to` ISO8601 UTC (Z/+00:00), mặc định một giờ gần nhất; experiment_id giới hạn theo phiên (nếu không truyền from/to thì dùng toàn phiên). History mặc định100, max1000/offset0; mỗi mẫu có `continuity` để frontend không nối qua ranh giới run/session/barrier. Timestamp HTTP là UTC ISO8601; `seq`, `uptime_ms`, `deadline_uptime_ms` là **chuỗi thập phân** trên HTTP để JavaScript không mất chính xác, còn MQTT vẫn dùng JSON number.
 
 Command202 chỉ có nghĩa đã ghi nhận, không phải node đã áp dụng. AUTO không kèm brightness; MANUAL bắt buộc số nguyên0–100. 409 nếu offline/telemetry>3s/đang chờ;422 sai input;503 broker/database/queue lỗi;404 không tìm thấy. Nếu HTTP503 do deadline worker, truy vấn pending_command_id của node trước khi gửi lại vì một thao tác đã bắt đầu có thể vừa ghi nhận xong. ACK mới xác nhận APPLIED/REJECTED; lấy applied thực từ telemetry. Backend retry một lần sau2s, TIMEOUT sau10s, không resend sau disconnect/restart.
 
 ## Phiên đo và CSV
 
 ```bash
+curl 'http://127.0.0.1:8000/api/experiments?limit=100&offset=0'
+curl http://127.0.0.1:8000/api/experiments/1
 curl -X POST http://127.0.0.1:8000/api/experiments -H 'Content-Type: application/json' -d '{"name":"EX-02 live","configuration":{"source":"live","firmware_sha256":"FILL_ACTUAL_HASH","voltage_v":12,"rated_power_w":24},"notes":"Ghi cấu hình và lịch thao tác thực tế"}'
 curl -X POST http://127.0.0.1:8000/api/experiments/1/stop
 curl 'http://127.0.0.1:8000/api/stats?experiment_id=1&node_id=node_01'
@@ -73,3 +75,7 @@ Năng lượng hình thang theo uptime node, không nối boot/restart/disconnec
 6. Bắt đầu phiên thực, chạy kịch bản theo SRS, stop, so CSV/API trên cùng node/phiên, kiểm đơn vị/công thức/coverage/reasons. Lưu cấu hình thực/hash/giờ thao tác/CSV/log vào firmware/docs/reports/evidence/task-008/live theo thư mục lượt riêng; không ghi đè fixture hoặc log cũ.
 
 Test tự động dùng MQTT/clock giả và DB tạm, không mở kết nối broker. Paho transport có test với Client giả chứng minh ứng dụng tạo client mới khi mất session; điều đó chưa thay thế kiểm broker/ESP32 thật hoặc kiểm stability30phút. Log/bằng chứng tại [TASK-008](../firmware/docs/reports/evidence/task-008/README.md). TestClient của bộ Starlette hiện pin có deprecation warning HTTPX; các test vẫn chạy, không suppress warning hoặc gọi đó là live PASS.
+
+## Bổ sung dashboard TASK-009
+
+GET `/api/experiments` trả items/total/limit/offset (limit1–1000, mặc định100), mới nhất trước theo started_at/id; GET `/api/experiments/{id}` trả cấu hình/notes/start/end hoặc404. Cùng POST đang có: tổng12 thao tác HTTP trên11 đường dẫn OpenAPI. Không thay MQTT, schema SQLite hoặc thuật toán điện năng. CORS5500 được thêm và giữ5173. Kiểm tra hồi quy hiện68 Pytest, Ruff check/format; evidence mới tại [TASK-009](../firmware/docs/reports/evidence/task-009/README.md).

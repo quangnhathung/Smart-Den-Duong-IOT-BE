@@ -106,7 +106,13 @@ class Reporting:
             (node, start, end, limit, offset),
         ).fetchall()
         items = [
-            dict(id=r["id"], received_at=r["received_at"], quality=r["quality"], telemetry=json.loads(r["payload"]))
+            dict(
+                id=r["id"],
+                received_at=r["received_at"],
+                quality=r["quality"],
+                continuity=r["continuity"],
+                telemetry=json.loads(r["payload"]),
+            )
             for r in rows
         ]
         return dict(items=items, total=total, limit=limit, offset=offset)
@@ -169,6 +175,18 @@ class Reporting:
             baseline_wh=baseline,
             saving_percent=(baseline - smart) / baseline * 100 if baseline else None,
         )
+
+    def experiments(self, limit=100, offset=0):
+        total = self.db.execute("SELECT count(*) FROM experiments").fetchone()[0]
+        rows = self.db.execute(
+            "SELECT * FROM experiments ORDER BY started_at DESC,id DESC LIMIT ? OFFSET ?", (limit, offset)
+        )
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["configuration"] = json.loads(item["configuration"])
+            items.append(item)
+        return dict(items=items, total=total, limit=limit, offset=offset)
 
     def experiment(self, experiment_id):
         row = self.db.execute("SELECT * FROM experiments WHERE id=?", (experiment_id,)).fetchone()
