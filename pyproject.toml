@@ -1,0 +1,17 @@
+[project]
+name = "smartlight-backend"
+version = "0.1.0"
+description = "Local MQTT v1 collector/API for the smart streetlight simulation"
+requires-python = ">=3.12,<3.13"
+dependencies = ["fastapi==0.163.1", "pydantic==2.14.3", "paho-mqtt==2.2.0", "uvicorn==0.54.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
