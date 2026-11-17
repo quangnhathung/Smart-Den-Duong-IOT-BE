@@ -79,3 +79,10 @@ Test tự động dùng MQTT/clock giả và DB tạm, không mở kết nối b
 ## Bổ sung dashboard TASK-009
 
 GET `/api/experiments` trả items/total/limit/offset (limit1–1000, mặc định100), mới nhất trước theo started_at/id; GET `/api/experiments/{id}` trả cấu hình/notes/start/end hoặc404. Cùng POST đang có: tổng12 thao tác HTTP trên11 đường dẫn OpenAPI. Không thay MQTT, schema SQLite hoặc thuật toán điện năng. CORS5500 được thêm và giữ5173. Kiểm tra hồi quy hiện68 Pytest, Ruff check/format; evidence mới tại [TASK-009](../firmware/docs/reports/evidence/task-009/README.md).
+
+
+## TASK-010 — sửa đồng bộ session sau restart/reconnect
+
+Actor đồng bộ connected/session ngay sau khi lấy job khỏi queue, trước khi xử lý event. Điều này tránh loại nhầm availability ONLINE retained vừa tới trong lúc chờ queue và để node kẹt UNCONFIRMED_BOOT sau restart backend. Vẫn cần telemetry mới đúng session/boot để mở khóa; event session cũ không được phục hồi node. Không đổi MQTT/HTTP API hoặc schema SQLite.
+
+Bộ hồi quy hiện72 Pytest và Ruff PASS, gồm4 trường hợp actor wake-up/session mới/cũ. Lỗi có2 ca tái hiện FAIL trước sửa và được xác minh phục hồi live cùng boot sau sửa. TASK-010 đã bổ sung UI REJECTED/TIMEOUT, pending/phiên mở qua restart, broker outage/reconnect/no-replay/AUTO offline và10 mẫu sensor → dashboard; xem hồ sơ completion trong firmware/docs/reports/evidence/task-010 và techs/backend.md. Môi trường QA dùng DB riêng/API8001, không thay cổng mặc định8000 hoặc dữ liệu người dùng.

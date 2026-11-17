@@ -74,6 +74,11 @@ class Service:
         except sqlite3.Error:
             pass
 
+    def _sync_connection(self):
+        connected, session = self.transport.connected, self.transport.session
+        if self.engine.broker != connected or self.engine.session != session:
+            self.engine.connection(connected, session)
+
     def _work(self):
         observed_drops = 0
         try:
@@ -88,8 +93,7 @@ class Service:
                     if self.dropped != observed_drops:
                         self.engine.pipeline_gap()
                         observed_drops = self.dropped
-                    if self.engine.broker != self.transport.connected or self.engine.session != self.transport.session:
-                        self.engine.connection(self.transport.connected, self.transport.session)
+                    self._sync_connection()
                     if self.jobs.qsize() < max(1, self.settings.queue_size // 2):
                         self.engine.queue_ok = True
                     try:
@@ -97,6 +101,9 @@ class Service:
                     except queue.Empty:
                         self.engine.tick()
                         continue
+                    # Readiness can change while Queue.get blocks. Establish the
+                    # current session before dispatching its first retained event.
+                    self._sync_connection()
                     if future is not None and not future.set_running_or_notify_cancel():
                         continue
                     try:
